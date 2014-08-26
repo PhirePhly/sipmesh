@@ -1,14 +1,27 @@
 #!/bin/sh
 # WRT54G Mesh config script
 # Kenneth Finnegan, 2014
+#
+# 1. Download this onto each clean OpenWRT install
+# 2. Change the hostname and node ID number to new unique values
+# 3. Run the script
+# 4. Profit
 
+# There's no DNS currently, so hostname does little
 HOSTNAME="WRTdefault"
-SUBNET="10.44.254"
+# NODEID determines which subnet is used by this node
+# Must be a number between 0 and 253
+NODEID="1"
+
+# Channel and ESSID must be the same for every node
 CHANNEL="11"
-ESSID="KWF-mesh"
+ESSID="W6KWF-mesh"
+
+LOCALNETPREFIX="44.128.$NODEID"
+MESHIP="44.128.254.$NODEID"
 
 opkg update
-opkg install olsrd ahcpd
+opkg install olsrd
 
 cat <<EOF >/etc/config/olsrd
 config olsrd
@@ -19,10 +32,15 @@ cat <<EOF >/etc/olsrd.conf
 IpVersion	4
 
 Hna4 {
-$SUBNET.0 255.255.255.0
+$LOCALNETPREFIX.0 255.255.255.0
 }
 
 Interfaces "wl0" {
+Ip4Broadcast 255.255.255.255
+AutoDetectChanges yes
+}
+
+Interface "eth0.0" {
 Ip4Broadcast 255.255.255.255
 AutoDetectChanges yes
 }
@@ -33,16 +51,16 @@ config 'system'
 	option 'hostname' '$HOSTNAME'
 	option 'zonename' 'America/Los Angeles'
 	option 'timezone' 'PST8PDT,M3.2.0,M11.1.0'
-	option 'log_ip' '10.44.1.10'
+	option 'log_ip' '44.128.254.254'
 	option 'log_port' '514'
 	option 'cronloglevel' '8'
 	
 config 'timeserver' 'ntp'
+	list 'server' '44.128.254.254'
 	list 'server' '0.openwrt.pool.ntp.org'
 	list 'server' '1.openwrt.pool.ntp.org'
 	list 'server' '2.openwrt.pool.ntp.org'
 	list 'server' '3.openwrt.pool.ntp.org'
-	list 'server' '10.44.10.1'
 EOF
 
 cat <<EOF >/etc/config/dhcp
@@ -50,8 +68,8 @@ config 'dnsmasq'
 	option 'domainneeded' '1'
 	option 'boguspriv' '1'
 	option 'localise_queries' '1'
-	option 'local' '/lan/'
-	option 'domain' 'lan'
+	option 'local' '/$HOSTNAME.mesh/'
+	option 'domain' '$HOSTNAME.mesh'
 	option 'expandhosts' '1'
 	option 'authoritative' '1'
 	option 'readethers' '1'
@@ -95,7 +113,7 @@ config 'interface' 'lan'
 	option 'ifname' 'eth0.0'
 	option 'proto' 'static'
 	option 'netmask' '255.255.255.0'
-	option 'ipaddr' '$SUBNET.1'
+	option 'ipaddr' '$LOCALNETPREFIX.1'
 
 config 'interface' 'wan'
 	option 'ifname' 'eth0.1'
@@ -103,7 +121,9 @@ config 'interface' 'wan'
 
 config 'interface' 'mesh'
 	option 'ifname' 'wl0'
-	option 'proto' 'ahcp'
+	option 'proto' 'static'
+	option 'netmask' '255.255.255.255'
+	option 'ipaddr' '$MESHIP'
 EOF
 
 cat <<EOF >/etc/config/wireless
@@ -120,4 +140,6 @@ config 'wifi-iface'
 	option 'mode' 'adhoc'
 	option 'ssid' '$ESSID'
 EOF
+
+# TODO Firewall
 
